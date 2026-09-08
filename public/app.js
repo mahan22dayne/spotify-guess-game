@@ -1,8 +1,8 @@
 (() => {
   const STAGE_MS = [500, 1000, 3000, 5000];
   const STAGE_LABELS = ['۰.۵ث', '۱ث', '۳ث', '۵ث'];
-  const STAGE_POINTS = [100, 75, 50, 25];
-  const ROUNDS_MAX = 12;
+  const STAGE_POINTS = [5, 4, 3, 2];
+  const ROUNDS_MAX = 20;
   const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 
   const screens = {
@@ -31,6 +31,7 @@
     guessInput: document.getElementById('input-guess'),
     suggestions: document.getElementById('suggestions'),
     submitGuessBtn: document.getElementById('btn-submit-guess'),
+    skipStageBtn: document.getElementById('btn-skip-stage'),
     giveupBtn: document.getElementById('btn-giveup'),
 
     reveal: document.getElementById('reveal'),
@@ -54,7 +55,7 @@
   let audio = null;
   let playTimer = null;
   let ringAnimFrame = null;
-  let roundLocked = false; // true once round is decided (correct or lost)
+  let roundLocked = false;
   let highlightedSuggestion = -1;
 
   function showScreen(name) {
@@ -66,7 +67,6 @@
     return (str || '').toLowerCase().trim().replace(/\s+/g, ' ');
   }
 
-  // ---------- Loading playlist ----------
   el.form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = el.urlInput.value.trim();
@@ -101,7 +101,6 @@
     }
   });
 
-  // ---------- Game setup ----------
   function startNewGame() {
     const total = Math.min(ROUNDS_MAX, allTracks.length);
     roundTracks = shuffle([...allTracks]).slice(0, total);
@@ -133,6 +132,7 @@
     el.guessInput.value = '';
     el.guessInput.disabled = false;
     el.submitGuessBtn.disabled = false;
+    el.skipStageBtn.disabled = false;
     el.giveupBtn.disabled = false;
     closeSuggestions();
     resetRing();
@@ -154,7 +154,6 @@
     });
   }
 
-  // ---------- Playback ----------
   el.playBtn.addEventListener('click', () => {
     if (roundLocked || !audio) return;
     playStage(attempt);
@@ -197,7 +196,6 @@
     el.ring.style.strokeDashoffset = RING_CIRCUMFERENCE;
   }
 
-  // ---------- Autocomplete ----------
   el.guessInput.addEventListener('input', () => {
     const q = normalize(el.guessInput.value);
     highlightedSuggestion = -1;
@@ -274,13 +272,11 @@
     return d.innerHTML;
   }
 
-  // ---------- Guessing ----------
   el.submitGuessBtn.addEventListener('click', submitGuess);
 
   function findGuessedTrack(text) {
     const q = normalize(text);
     if (!q) return null;
-    // اول یه match دقیق‌تر روی اسم می‌گردیم، بعد substring
     return (
       allTracks.find((t) => normalize(t.name) === q) ||
       allTracks.find((t) => normalize(t.name).includes(q) && q.length > 2)
@@ -297,16 +293,29 @@
     } else if (attempt >= STAGE_MS.length - 1) {
       finishRound(false);
     } else {
-      attempt++;
-      updateAttemptDots();
-      el.playTime.textContent = STAGE_LABELS[attempt];
-      resetRing();
-      el.guessInput.value = '';
-      closeSuggestions();
-      el.guessInput.classList.add('shake');
-      setTimeout(() => el.guessInput.classList.remove('shake'), 300);
+      advanceStage();
     }
   }
+
+  function advanceStage() {
+    attempt++;
+    updateAttemptDots();
+    el.playTime.textContent = STAGE_LABELS[attempt];
+    resetRing();
+    el.guessInput.value = '';
+    closeSuggestions();
+    el.guessInput.classList.add('shake');
+    setTimeout(() => el.guessInput.classList.remove('shake'), 300);
+  }
+
+  el.skipStageBtn.addEventListener('click', () => {
+    if (roundLocked) return;
+    if (attempt >= STAGE_MS.length - 1) {
+      finishRound(false);
+    } else {
+      advanceStage();
+    }
+  });
 
   el.giveupBtn.addEventListener('click', () => finishRound(false));
 
@@ -318,6 +327,7 @@
     el.bars.classList.remove('active');
     el.guessInput.disabled = true;
     el.submitGuessBtn.disabled = true;
+    el.skipStageBtn.disabled = true;
     el.giveupBtn.disabled = true;
     closeSuggestions();
 
@@ -347,7 +357,6 @@
     }
   });
 
-  // ---------- End of game ----------
   function endGame() {
     const max = roundTracks.length * STAGE_POINTS[0];
     el.endHeadline.textContent = `امتیازت: ${score} از ${max}`;
